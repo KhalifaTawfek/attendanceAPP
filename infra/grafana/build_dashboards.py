@@ -1,0 +1,135 @@
+"""Regenerate the Grafana dashboard JSON.  Usage: python infra/grafana/build_dashboards.py infra/grafana/dashboards"""
+import json
+import sys
+from pathlib import Path
+
+out = Path(sys.argv[1])
+out.mkdir(parents=True, exist_ok=True)
+PROM = {"type": "prometheus", "uid": "prometheus"}
+PG = {"type": "grafana-postgresql-datasource", "uid": "attendance-pg"}
+
+_id = 0
+
+
+def panel(title, ptype, targets, x, y, w, h, ds, unit=None, **extra):
+    global _id
+    _id += 1
+    p = {
+        "id": _id, "title": title, "type": ptype, "datasource": ds,
+        "gridPos": {"x": x, "y": y, "w": w, "h": h},
+        "targets": [{**t, "refId": chr(65 + i), "datasource": ds} for i, t in enumerate(targets)],
+        "fieldConfig": {"defaults": {"unit": unit} if unit else {}, "overrides": []},
+        "options": {},
+    }
+    p.update(extra)
+    return p
+
+
+def prom(expr, legend=""):
+    return {"expr": expr, "legendFormat": legend}
+
+
+def sql(q, fmt="table"):
+    return {"rawSql": q, "format": fmt, "rawQuery": True, "editorMode": "code"}
+
+
+def dashboard(uid, title, panels, time_from="now-6h"):
+    return {
+        "uid": uid, "title": title, "schemaVersion": 39, "version": 1, "editable": True,
+        "refresh": "30s", "time": {"from": time_from, "to": "now"}, "tags": ["attendance"],
+        "panels": panels,
+    }
+
+
+api = dashboard("attendance-api", "Attendance API Health", [
+    panel("API up", "stat", [prom('max(up{job="attendance-api"})')], 0, 0, 4, 4, PROM,
+          fieldConfig={"defaults": {"mappings": [{"type": "value", "options": {
+              "0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]}, "overrides": []}),
+    panel("Requests / s", "stat", [prom("sum(rate(http_requests_total[5m]))")], 4, 0, 5, 4, PROM, "reqps"),
+    panel("5xx error ratio", "stat", [prom(
+        'sum(rate(http_requests_total{status="5xx"}[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 1e-9)')],
+        9, 0, 5, 4, PROM, "percentunit"),
+    panel("p95 latency", "stat", [prom(
+        "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))")],
+        14, 0, 5, 4, PROM, "s"),
+    panel("Submissions (1h)", "stat", [prom("sum(increase(attendance_submissions_total[1h]))")],
+          19, 0, 5, 4, PROM),
+    panel("Request rate by endpoint", "timeseries",
+          [prom("sum(rate(http_requests_total[5m])) by (method, handler)", "{{method}} {{handler}}")],
+          0, 4, 12, 8, PROM, "reqps"),
+    panel("Responses by status class", "timeseries",
+          [prom("sum(rate(http_requests_total[5m])) by (status)", "{{status}}")], 12, 4, 12, 8, PROM, "reqps"),
+    panel("Latency p50 / p95 / p99", "timeseries", [
+        prom("histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "p50"),
+        prom("histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "p95"),
+        prom("histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "p99"),
+    ], 0, 12, 12, 8, PROM, "s"),
+    panel("Slowest endpoints (p95)", "timeseries", [prom(
+        "topk(5, histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, handler)))",
+        "{{handler}}")], 12, 12, 12, 8, PROM, "s"),
+    panel("Attendance submissions", "timeseries",
+          [prom("sum(increase(attendance_submissions_total[5m])) by (late)", "late={{late}}")],
+          0, 20, 8, 8, PROM),
+    panel("Reviews", "timeseries",
+          [prom("sum(increase(attendance_reviews_total[5m])) by (status)", "{{status}}")], 8, 20, 8, 8, PROM),
+    panel("Login attempts", "timeseries",
+          [prom("sum(increase(login_attempts_total[5m])) by (result)", "{{result}}")], 16, 20, 8, 8, PROM),
+])
+
+ACTIVE = "(SELECT count(*) FROM users WHERE is_active AND role = 'user')"
+# Expected attendees of event `e`: members of its groups, or every active user when it has none.
+EXPECTED = (
+    "(CASE WHEN EXISTS (SELECT 1 FROM event_groups eg WHERE eg.event_id = e.id) THEN "
+    "(SELECT count(DISTINCT u.id) FROM users u JOIN group_members gm ON gm.user_id = u.id "
+    "JOIN event_groups eg ON eg.group_id = gm.group_id "
+    "WHERE eg.event_id = e.id AND u.is_active AND u.role = 'user') "
+    f"ELSE {ACTIVE} END)"
+)
+biz = dashboard("attendance-overview", "Attendance Overview", [
+    panel("Active users", "stat", [sql(f"SELECT {ACTIVE} AS value")], 0, 0, 4, 4, PG),
+    panel("Events in range", "stat", [sql(
+        "SELECT count(*) AS value FROM events WHERE $__timeFilter(starts_at)")], 4, 0, 4, 4, PG),
+    panel("Submissions in range", "stat", [sql(
+        "SELECT count(*) AS value FROM attendances WHERE $__timeFilter(submitted_at)")], 8, 0, 4, 4, PG),
+    panel("Pending review", "stat", [sql(
+        "SELECT count(*) AS value FROM attendances WHERE status = 'pending'")], 12, 0, 4, 4, PG),
+    panel("Late ratio (range)", "stat", [sql(
+        "SELECT coalesce(avg(CASE WHEN is_late THEN 1.0 ELSE 0 END), 0) AS value "
+        "FROM attendances WHERE $__timeFilter(submitted_at)")], 16, 0, 4, 4, PG, "percentunit"),
+    panel("Approval ratio (reviewed)", "stat", [sql(
+        "SELECT coalesce(avg(CASE WHEN status = 'approved' THEN 1.0 ELSE 0 END), 0) AS value "
+        "FROM attendances WHERE status <> 'pending' AND $__timeFilter(submitted_at)")],
+        20, 0, 4, 4, PG, "percentunit"),
+    panel("Submissions over time", "timeseries", [sql(
+        "SELECT $__timeGroupAlias(submitted_at, '1h'), count(*) AS submissions, "
+        "sum(CASE WHEN is_late THEN 1 ELSE 0 END) AS late "
+        "FROM attendances WHERE $__timeFilter(submitted_at) GROUP BY 1 ORDER BY 1", "time_series")],
+        0, 4, 16, 9, PG),
+    panel("Status distribution", "piechart", [sql(
+        "SELECT status::text AS metric, count(*) AS value FROM attendances "
+        "WHERE $__timeFilter(submitted_at) GROUP BY 1")], 16, 4, 8, 9, PG,
+        options={"reduceOptions": {"values": True, "calcs": ["lastNotNull"], "fields": ""},
+                 "legend": {"displayMode": "table", "placement": "right", "values": ["value"]}}),
+    panel("Turnout per event", "table", [sql(
+        "SELECT e.title AS event, e.starts_at AS starts, count(a.id) AS submissions, "
+        "coalesce((SELECT string_agg(g.name, ', ') FROM event_groups eg JOIN groups g ON g.id = eg.group_id "
+        "WHERE eg.event_id = e.id), 'Everyone') AS audience, "
+        f"{EXPECTED} AS expected, "
+        f"round(100.0 * count(a.id) / nullif({EXPECTED}, 0), 1) AS turnout_pct, "
+        "sum(CASE WHEN a.status = 'approved' THEN 1 ELSE 0 END) AS approved, "
+        "sum(CASE WHEN a.status = 'pending' THEN 1 ELSE 0 END) AS pending, "
+        "sum(CASE WHEN a.status = 'rejected' THEN 1 ELSE 0 END) AS rejected, "
+        "sum(CASE WHEN a.is_late THEN 1 ELSE 0 END) AS late "
+        "FROM events e LEFT JOIN attendances a ON a.event_id = e.id "
+        "WHERE $__timeFilter(e.starts_at) GROUP BY e.id ORDER BY e.starts_at DESC")], 0, 13, 24, 9, PG),
+    panel("Most frequent attendees (range)", "table", [sql(
+        "SELECT u.full_name AS user, u.email, count(*) AS submissions, "
+        "sum(CASE WHEN a.is_late THEN 1 ELSE 0 END) AS late "
+        "FROM attendances a JOIN users u ON u.id = a.user_id "
+        "WHERE $__timeFilter(a.submitted_at) GROUP BY u.id ORDER BY submissions DESC LIMIT 20")],
+        0, 22, 24, 8, PG),
+], time_from="now-30d")
+
+for name, d in [("api-health.json", api), ("attendance-overview.json", biz)]:
+    (out / name).write_text(json.dumps(d, indent=2))
+print("ok")

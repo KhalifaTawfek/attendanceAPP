@@ -1,0 +1,366 @@
+{
+  "uid": "attendance-overview",
+  "title": "Attendance Overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "tags": [
+    "attendance"
+  ],
+  "panels": [
+    {
+      "id": 13,
+      "title": "Active users",
+      "type": "stat",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "attendance-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT (SELECT count(*) FROM users WHERE is_active AND role = 'user') AS value",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "attendance-pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 14,
+      "title": "Events in range",
+      "type": "stat",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "attendance-pg"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) AS value FROM events WHERE $__timeFilter(starts_at)",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "attendance-pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 15,
+      "title": "Submissions in range",
+      "type": "stat",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "attendance-pg"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) AS value FROM attendances WHERE $__timeFilter(submitted_at)",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "attendance-pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 16,
+      "title": "Pending review",
+      "type": "stat",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "attendance-pg"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) AS value FROM attendances WHERE status = 'pending'",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "attendance-pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 17,
+      "title": "Late ratio (range)",
+      "type": "stat",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "attendance-pg"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT coalesce(avg(CASE WHEN is_late THEN 1.0 ELSE 0 END), 0) AS value FROM attendances WHERE $__timeFilter(submitted_at)",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "attendance-pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 18,
+      "title": "Approval ratio (reviewed)",
+      "type": "stat",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "attendance-pg"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT coalesce(avg(CASE WHEN status = 'approved' THEN 1.0 ELSE 0 END), 0) AS value FROM attendances WHERE status <> 'pending' AND $__timeFilter(submitted_at)",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "attendance-pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 19,
+      "title": "Submissions over time",
+      "type": "timeseries",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "attendance-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 16,
+        "h": 9
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT $__timeGroupAlias(submitted_at, '1h'), count(*) AS submissions, sum(CASE WHEN is_late THEN 1 ELSE 0 END) AS late FROM attendances WHERE $__timeFilter(submitted_at) GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "attendance-pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 20,
+      "title": "Status distribution",
+      "type": "piechart",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "attendance-pg"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 9
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT status::text AS metric, count(*) AS value FROM attendances WHERE $__timeFilter(submitted_at) GROUP BY 1",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "attendance-pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value"
+          ]
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "Turnout per event",
+      "type": "table",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "attendance-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT e.title AS event, e.starts_at AS starts, count(a.id) AS submissions, coalesce((SELECT string_agg(g.name, ', ') FROM event_groups eg JOIN groups g ON g.id = eg.group_id WHERE eg.event_id = e.id), 'Everyone') AS audience, (CASE WHEN EXISTS (SELECT 1 FROM event_groups eg WHERE eg.event_id = e.id) THEN (SELECT count(DISTINCT u.id) FROM users u JOIN group_members gm ON gm.user_id = u.id JOIN event_groups eg ON eg.group_id = gm.group_id WHERE eg.event_id = e.id AND u.is_active AND u.role = 'user') ELSE (SELECT count(*) FROM users WHERE is_active AND role = 'user') END) AS expected, round(100.0 * count(a.id) / nullif((CASE WHEN EXISTS (SELECT 1 FROM event_groups eg WHERE eg.event_id = e.id) THEN (SELECT count(DISTINCT u.id) FROM users u JOIN group_members gm ON gm.user_id = u.id JOIN event_groups eg ON eg.group_id = gm.group_id WHERE eg.event_id = e.id AND u.is_active AND u.role = 'user') ELSE (SELECT count(*) FROM users WHERE is_active AND role = 'user') END), 0), 1) AS turnout_pct, sum(CASE WHEN a.status = 'approved' THEN 1 ELSE 0 END) AS approved, sum(CASE WHEN a.status = 'pending' THEN 1 ELSE 0 END) AS pending, sum(CASE WHEN a.status = 'rejected' THEN 1 ELSE 0 END) AS rejected, sum(CASE WHEN a.is_late THEN 1 ELSE 0 END) AS late FROM events e LEFT JOIN attendances a ON a.event_id = e.id WHERE $__timeFilter(e.starts_at) GROUP BY e.id ORDER BY e.starts_at DESC",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "attendance-pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 22,
+      "title": "Most frequent attendees (range)",
+      "type": "table",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "attendance-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT u.full_name AS user, u.email, count(*) AS submissions, sum(CASE WHEN a.is_late THEN 1 ELSE 0 END) AS late FROM attendances a JOIN users u ON u.id = a.user_id WHERE $__timeFilter(a.submitted_at) GROUP BY u.id ORDER BY submissions DESC LIMIT 20",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "attendance-pg"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    }
+  ]
+}

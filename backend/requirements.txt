@@ -1,0 +1,18 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic-settings==2.9.1
+email-validator==2.2.0
+sqlalchemy==2.0.41
+psycopg[binary]==3.2.9
+alembic==1.16.1
+python-multipart==0.0.20
+pyjwt==2.10.1
+bcrypt==4.3.0
+pillow==11.2.1
+openpyxl==3.1.5
+prometheus-fastapi-instrumentator==7.1.0
+prometheus-client==0.22.0
+
+# dev / test
+pytest==8.3.5
+httpx==0.28.1

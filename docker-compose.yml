@@ -1,0 +1,64 @@
+name: attendance
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: attendance
+      POSTGRES_USER: attendance
+      POSTGRES_PASSWORD: attendance
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U attendance -d attendance"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    profiles: ["app"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://attendance:attendance@postgres:5432/attendance
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin12345}
+      UPLOAD_DIR: /data/uploads
+      CORS_ORIGINS: '["http://localhost:8080"]'
+    volumes: [uploads:/data/uploads]
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  frontend:
+    build: ./frontend
+    profiles: ["app"]
+    ports: ["8080:80"]
+    depends_on: [backend]
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  grafana:
+    image: grafana/grafana-oss:12.0.1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      PROMETHEUS_URL: http://prometheus:9090
+      PG_HOST: postgres:5432
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana:/var/lib/grafana
+    ports: ["3000:3000"]
+    depends_on: [prometheus, postgres]
+
+volumes:
+  pgdata:
+  uploads:
+  grafana:

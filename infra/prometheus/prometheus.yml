@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: attendance-api
+    metrics_path: /metrics
+    static_configs:
+      # backend in compose ("app" profile) and backend running natively on the host
+      - targets: ["backend:8000", "host.docker.internal:8000"]
