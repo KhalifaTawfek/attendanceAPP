@@ -8,6 +8,8 @@ Attendance tracking with photo + form check-ins, an admin dashboard, and Grafana
 
 Requirements, assumptions and design: [docs/PLAN.md](docs/PLAN.md).
 
+Deployment using GitHub Pages for the frontend and ngrok on a Windows PC for the backend: [docs/DEPLOY-GITHUB-NGROK.md](docs/DEPLOY-GITHUB-NGROK.md).
+
 ## Features
 
 **Users** sign in with an account the admin enrolled, see the events for their groups whose check-in is open, and check in by uploading a photo and filling out a short form: activity summary, an optional location note, and a presence declaration. They can see their history and its review status, and change their password.

@@ -128,7 +128,9 @@ async function raw(path: string, init: RequestInit = {}): Promise<Response> {
   const token = tokenStore.get()
   if (token) headers.set('Authorization', `Bearer ${token}`)
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
-  const res = await fetch(`/api${path}`, { ...init, headers })
+  const apiOrigin = (import.meta.env.VITE_API_ORIGIN || '').replace(/\/$/, '')
+  if (apiOrigin) headers.set('ngrok-skip-browser-warning', 'true')
+  const res = await fetch(`${apiOrigin}/api${path}`, { ...init, headers })
   if (!res.ok) {
     if (res.status === 401 && token) onUnauthorized()
     const body = await res.json().catch(() => null)
