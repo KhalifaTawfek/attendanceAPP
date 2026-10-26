@@ -11,7 +11,8 @@ class ORM(BaseModel):
 
 # --- auth / users ---------------------------------------------------------
 class LoginIn(BaseModel):
-    email: EmailStr
+    # An email, or a plain username such as the seeded "admin" account.
+    email: str = Field(min_length=1, max_length=320)
     password: str
 
 

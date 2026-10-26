@@ -8,3 +8,6 @@ frontend/dist/
 .env
 .env.deploy
 backend/dev.db
+
+# VPS login details (never commit)
+deploy/vps/CREDENTIALS.local.txt

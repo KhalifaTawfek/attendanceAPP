@@ -9,6 +9,7 @@ import Groups from './pages/admin/Groups'
 import Users from './pages/admin/Users'
 import CheckIn from './pages/CheckIn'
 import Login from './pages/Login'
+import Signup from './pages/Signup'
 import MyEvents from './pages/MyEvents'
 import MyHistory from './pages/MyHistory'
 
@@ -18,6 +19,7 @@ export default function App() {
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
           <Route element={<RequireAuth />}>
             <Route element={<Layout />}>
               <Route path="/account" element={<Account />} />

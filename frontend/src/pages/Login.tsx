@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { ErrorNote } from '../components'
 
@@ -31,10 +31,10 @@ export default function Login() {
     <div className="login-wrap">
       <form className="card login" onSubmit={submit}>
         <h1>✓ Attendance</h1>
-        <p className="muted">Sign in with the account your administrator enrolled.</p>
+        <p className="muted">Sign in to see your events and check in.</p>
         <label>
-          Email
-          <input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          Email or username
+          <input type="text" autoComplete="username" autoCapitalize="none" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
         <label>
           Password
@@ -43,6 +43,7 @@ export default function Login() {
         </label>
         <ErrorNote error={error} />
         <button className="primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+        <p className="muted">New here? <Link to="/signup">Create an account</Link></p>
       </form>
     </div>
   )
