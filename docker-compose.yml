@@ -24,6 +24,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin12345}
+      ALLOW_SELF_REGISTRATION: "true"
       UPLOAD_DIR: /data/uploads
       CORS_ORIGINS: '["http://localhost:8080"]'
     volumes: [uploads:/data/uploads]

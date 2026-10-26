@@ -12,13 +12,13 @@ Deployment using GitHub Pages for the frontend and ngrok on a Windows PC for the
 
 ## Features
 
-**Users** sign in with an account the admin enrolled, see the events for their groups whose check-in is open, and check in by uploading a photo and filling out a short form: activity summary, an optional location note, and a presence declaration. They can see their history and its review status, and change their password.
+**Users** sign up on their own (or get an account from the admin), see the events for their groups whose check-in is open, and check in by uploading a photo and filling out a short form: activity summary, the room they are in (CJ building rooms, pre-selected from the event), and a presence declaration. They can see their history and its review status, and change their password.
 
 **Admins** can:
 - see a dashboard of KPIs and per-event turnout
-- create, edit and delete events, each with a check-in window and a "late after" threshold
+- create, edit and delete events, each held in a CJ room (CJ 01-05, 11-15, 21-25), with a check-in window and a "late after" threshold
 - make events recurring (daily, weekly on chosen weekdays, or monthly; N times or until a date) and edit or delete one occurrence, this and following, or the whole series
-- manage user groups and limit events to them, so only members see the event and only members count as expected
+- manage user groups and limit events to them, so only members see the event and only members count as expected; the member picker filters by role, by membership of another group and by selection, with "select all shown"
 - enroll, disable and promote users, and reset their passwords
 - browse attendances with filters (event, user, group, status, late, date range, free text), sorting and pagination
 - review each submission (photo and form) and approve or reject it with a comment
@@ -32,7 +32,7 @@ docker compose up -d                    # postgres, prometheus, grafana
 docker compose --profile app up -d      # + backend (8000) and frontend (8080)
 ```
 
-- App: http://localhost:8080 (admin: `admin@example.com` / `admin12345`)
+- App: http://localhost:8080 (admin: `admin@example.com` / `admin12345`, or create a user account with **Sign up**)
 - Grafana: http://localhost:3000 (`admin` / `admin`), folder **Attendance**
 - Prometheus: http://localhost:9090
 

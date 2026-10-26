@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   build:
+    # Only for a deployment with a public ngrok backend; skipped when the variable is not set.
+    if: ${{ vars.NGROK_API_ORIGIN != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,14 +28,6 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Require the public ngrok origin
-        env:
-          VITE_API_ORIGIN: ${{ vars.NGROK_API_ORIGIN }}
-        run: |
-          if [ -z "$VITE_API_ORIGIN" ]; then
-            echo "Set repository variable NGROK_API_ORIGIN to your https://...ngrok-free.dev URL" >&2
-            exit 1
-          fi
       - name: Build frontend
         working-directory: frontend
         env:
