@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, fmt, type EventItem } from '../api'
 import { ErrorNote } from '../components'
+import { ROOM_FLOORS, ROOMS } from '../rooms'
 
 const MAX_MB = 5
 
@@ -18,7 +19,12 @@ export default function CheckIn() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    api<EventItem>(`/events/${eventId}`).then(setEvent).catch((e) => setError(e.message))
+    api<EventItem>(`/events/${eventId}`)
+      .then((ev) => {
+        setEvent(ev)
+        if (ROOMS.includes(ev.location)) setLocationNote(ev.location)   // start from the event's room
+      })
+      .catch((e) => setError(e.message))
   }, [eventId])
 
   useEffect(() => {
@@ -88,9 +94,15 @@ export default function CheckIn() {
         </label>
 
         <label>
-          Where are you? <span className="muted">(optional)</span>
-          <input maxLength={200} value={locationNote} onChange={(e) => setLocationNote(e.target.value)}
-            disabled={blocked} placeholder="Room / desk / site" />
+          Which room are you in? <span className="muted">(optional)</span>
+          <select value={locationNote} onChange={(e) => setLocationNote(e.target.value)} disabled={blocked}>
+            <option value="">Not in a listed room</option>
+            {ROOM_FLOORS.map((fl) => (
+              <optgroup key={fl.label} label={fl.label}>
+                {fl.rooms.map((r) => <option key={r}>{r}</option>)}
+              </optgroup>
+            ))}
+          </select>
         </label>
 
         <label className="check">

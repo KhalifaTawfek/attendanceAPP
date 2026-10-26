@@ -5,6 +5,7 @@ import {
   type EventItem, type Frequency, type GroupBrief, type User,
 } from '../../api'
 import { ErrorNote, Modal } from '../../components'
+import { ROOM_FLOORS, ROOMS } from '../../rooms'
 
 type Scope = 'this' | 'future' | 'all'
 
@@ -186,7 +187,17 @@ function EventForm({ event, groups, onClose, onSaved }: {
     <Modal title={event ? 'Edit event' : 'New event'} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         <label>Title *<input required maxLength={200} value={f.title} onChange={set('title')} /></label>
-        <label>Location<input maxLength={200} value={f.location} onChange={set('location')} /></label>
+        <label>Room
+          <select value={f.location} onChange={set('location')}>
+            <option value="">No room</option>
+            {f.location && !ROOMS.includes(f.location) && <option value={f.location}>{f.location}</option>}
+            {ROOM_FLOORS.map((fl) => (
+              <optgroup key={fl.label} label={fl.label}>
+                {fl.rooms.map((r) => <option key={r}>{r}</option>)}
+              </optgroup>
+            ))}
+          </select>
+        </label>
         <label>Description<textarea rows={2} value={f.description} onChange={set('description')} /></label>
         <div className="two">
           <label>Starts *<input type="datetime-local" required value={f.starts_at} onChange={set('starts_at')} /></label>
