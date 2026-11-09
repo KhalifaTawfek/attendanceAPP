@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Navigate, Outlet } from 'react-router-dom'
 import { fetchBlob, type AttendanceStatus, type Role } from './api'
 import { useAuth } from './auth'
+import { useInbox } from './inbox'
 
 export function RequireAuth({ role }: { role?: Role }) {
   const { user, loading } = useAuth()
@@ -13,19 +14,25 @@ export function RequireAuth({ role }: { role?: Role }) {
 
 export function Layout() {
   const { user, logout } = useAuth()
-  const links =
+  const inbox = useInbox(user?.role === 'user')
+  const links: [string, string, number?][] =
     user?.role === 'admin'
       ? [
           ['/admin', 'Dashboard'],
           ['/admin/attendances', 'Attendances'],
+          ['/admin/import', 'Import list'],
           ['/admin/events', 'Events'],
           ['/admin/users', 'Users'],
           ['/admin/groups', 'Groups'],
+          ['/admin/announcements', 'Announcements'],
+          ['/admin/polls', 'Polls'],
           ['/account', 'Account'],
         ]
       : [
           ['/', 'Events'],
           ['/history', 'My attendance'],
+          ['/announcements', 'Announcements', inbox?.unread_announcements],
+          ['/polls', 'Polls', inbox?.polls_to_vote],
           ['/account', 'Account'],
         ]
   return (
@@ -33,9 +40,10 @@ export function Layout() {
       <header className="topbar">
         <span className="brand">✓ Attendance</span>
         <nav>
-          {links.map(([to, label]) => (
+          {links.map(([to, label, count]) => (
             <NavLink key={to} to={to} end={to === '/' || to === '/admin'}>
               {label}
+              {!!count && <span className="nav-count" aria-label={`${count} new`}>{count}</span>}
             </NavLink>
           ))}
         </nav>

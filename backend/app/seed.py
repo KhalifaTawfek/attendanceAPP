@@ -1,4 +1,4 @@
-"""Seed demo users. Idempotent: existing demo users only get their password reset.
+"""Seed demo users and two demo groups. Idempotent: existing demo users only get their password reset.
 
 Usage:  python -m app.seed [--password PASSWORD]
 """
@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 
 from app.db import SessionLocal
 from app.main import seed_admin
-from app.models import Role, User
+from app.models import Group, Role, User
 from app.security import hash_password
 
 DEMO_USERS = [
@@ -44,6 +44,13 @@ def main() -> None:
                 continue
             db.add(User(email=email, full_name=full_name, password_hash=pw_hash, role=role))
             created += 1
+        db.flush()
+        # Two groups so group-targeted announcements and polls can be tried straight away.
+        students = db.scalars(select(User).where(User.email.in_([e for _, e, r in DEMO_USERS if r == Role.user]))
+                              .order_by(User.full_name)).all()
+        for name, members in (("Demo group A", students[:6]), ("Demo group B", students[6:])):
+            if not db.scalar(select(Group.id).where(Group.name == name)):
+                db.add(Group(name=name, description="Created by app.seed", members=list(members)))
         db.commit()
     print(f"Created {created} user(s), reset password on {len(DEMO_USERS) - created}. Password: {args.password}")
 

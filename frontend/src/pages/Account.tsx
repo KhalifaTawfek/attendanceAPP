@@ -1,25 +1,25 @@
 import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api, json } from '../api'
 import { useAuth } from '../auth'
 import { ErrorNote } from '../components'
 
 export default function Account() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    setDone(false)
     if (next !== confirm) return setError('New passwords do not match.')
     setError(null)
     try {
       await api('/auth/change-password', json('POST', { current_password: current, new_password: next }))
-      setDone(true)
-      setCurrent(''); setNext(''); setConfirm('')
+      await logout()
+      navigate('/login?password_changed=1', { replace: true })
     } catch (err) {
       setError((err as Error).message)
     }
@@ -44,7 +44,6 @@ export default function Account() {
           <input type="password" required minLength={8} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
         </label>
         <ErrorNote error={error} />
-        {done && <div className="success">Password updated.</div>}
         <button className="primary">Update password</button>
       </form>
     </div>

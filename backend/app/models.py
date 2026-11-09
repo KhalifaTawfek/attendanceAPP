@@ -62,6 +62,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(200))
     password_hash: Mapped[str] = mapped_column(String(200))
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     role: Mapped[Role] = mapped_column(Enum(Role, name="user_role"), default=Role.user)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -122,6 +123,26 @@ class Event(Base):
     series: Mapped[EventSeries | None] = relationship(back_populates="events", lazy="joined")
 
 
+class OcrImport(Base):
+    """A batch of photographed paper attendance lists for one event."""
+
+    __tablename__ = "ocr_imports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Chosen by the admin during review; may be unknown at upload time.
+    event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id", ondelete="SET NULL"), index=True)
+    engine: Mapped[str] = mapped_column(String(32))
+    detected_date: Mapped[date | None] = mapped_column(Date)  # read from the sheet
+    date_text: Mapped[str] = mapped_column(String(100), default="")  # the text it was read from
+    photo_date: Mapped[date | None] = mapped_column(Date)  # camera EXIF date, a fallback hint
+    image_paths: Mapped[str] = mapped_column(Text)  # JSON list of upload-relative paths
+    raw_text: Mapped[str] = mapped_column(Text, default="")
+    result: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of matched lines
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Attendance(Base):
     __tablename__ = "attendances"
     __table_args__ = (UniqueConstraint("event_id", "user_id", name="uq_attendance_event_user"),)
@@ -141,6 +162,100 @@ class Attendance(Base):
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    source: Mapped[str] = mapped_column(String(16), default="self")  # self | ocr
+    ocr_import_id: Mapped[int | None] = mapped_column(ForeignKey("ocr_imports.id", ondelete="SET NULL"))
 
     event: Mapped[Event] = relationship(back_populates="attendances")
     user: Mapped[User] = relationship(foreign_keys=[user_id])
+
+
+# --- communication: announcements (newsletter) and polls ---------------------
+announcement_groups = Table(
+    "announcement_groups",
+    Base.metadata,
+    Column("announcement_id", ForeignKey("announcements.id", ondelete="CASCADE"), primary_key=True),
+    Column("group_id", ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True, index=True),
+)
+
+poll_groups = Table(
+    "poll_groups",
+    Base.metadata,
+    Column("poll_id", ForeignKey("polls.id", ondelete="CASCADE"), primary_key=True),
+    Column("group_id", ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True, index=True),
+)
+
+
+class Announcement(Base):
+    """A message from an admin (professor) to everyone, or to the members of some groups."""
+
+    __tablename__ = "announcements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)  # Markdown; the UI renders a safe subset
+    audience_all: Mapped[bool] = mapped_column(Boolean, default=False)
+    attachment_path: Mapped[str | None] = mapped_column(String(300))
+    attachment_name: Mapped[str | None] = mapped_column(String(255))
+    attachment_type: Mapped[str | None] = mapped_column(String(50))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    groups: Mapped[list[Group]] = relationship(secondary=announcement_groups, lazy="selectin")
+    author: Mapped[User | None] = relationship(lazy="joined")
+    reads: Mapped[list["AnnouncementRead"]] = relationship(cascade="all, delete-orphan", passive_deletes=True)
+
+
+class AnnouncementRead(Base):
+    __tablename__ = "announcement_reads"
+    __table_args__ = (UniqueConstraint("announcement_id", "user_id", name="uq_announcement_read"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    announcement_id: Mapped[int] = mapped_column(ForeignKey("announcements.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Poll(Base):
+    __tablename__ = "polls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    # Anonymous polls never reveal which option a user picked, not even to admins.
+    is_anonymous: Mapped[bool] = mapped_column(Boolean, default=True)
+    audience_all: Mapped[bool] = mapped_column(Boolean, default=False)
+    closes_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # closed early
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    groups: Mapped[list[Group]] = relationship(secondary=poll_groups, lazy="selectin")
+    author: Mapped[User | None] = relationship(lazy="joined")
+    options: Mapped[list["PollOption"]] = relationship(
+        cascade="all, delete-orphan", passive_deletes=True, order_by="PollOption.position", lazy="selectin"
+    )
+    votes: Mapped[list["Vote"]] = relationship(cascade="all, delete-orphan", passive_deletes=True)
+
+
+class PollOption(Base):
+    __tablename__ = "poll_options"
+    __table_args__ = (UniqueConstraint("poll_id", "position", name="uq_poll_option_position"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    poll_id: Mapped[int] = mapped_column(ForeignKey("polls.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(200))
+    position: Mapped[int] = mapped_column(Integer)
+
+
+class Vote(Base):
+    """One vote per user per poll. user_id is kept only to enforce that and for audit;
+    the results API never exposes it for anonymous polls."""
+
+    __tablename__ = "poll_votes"
+    __table_args__ = (UniqueConstraint("poll_id", "user_id", name="uq_poll_vote_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    poll_id: Mapped[int] = mapped_column(ForeignKey("polls.id", ondelete="CASCADE"), index=True)
+    option_id: Mapped[int] = mapped_column(ForeignKey("poll_options.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    voted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

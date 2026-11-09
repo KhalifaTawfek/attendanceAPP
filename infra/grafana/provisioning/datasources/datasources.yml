@@ -20,4 +20,4 @@ datasources:
       postgresVersion: 1700
       timescaledb: false
     secureJsonData:
-      password: grafana_reader
+      password: ${GRAFANA_DB_PASSWORD}

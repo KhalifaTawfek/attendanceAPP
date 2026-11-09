@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, describeSeries, fmt, type EventItem } from '../api'
+import { allPages, describeSeries, fmt, type EventItem } from '../api'
 import { ErrorNote, StatusBadge } from '../components'
 
 export default function MyEvents() {
@@ -8,7 +8,7 @@ export default function MyEvents() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api<EventItem[]>('/events').then(setEvents).catch((e) => setError(e.message))
+    allPages<EventItem>('/events').then(setEvents).catch((e) => setError(e.message))
   }, [])
 
   const open = events?.filter((e) => e.check_in_open) ?? []

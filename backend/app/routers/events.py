@@ -1,14 +1,14 @@
 from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 
 from app.config import get_settings
 from app.deps import DB, AdminUser, CurrentUser
-from app.models import Attendance, Event, EventSeries, Group, Role, User
+from app.models import Attendance, Event, EventSeries, Group, OcrImport, Role, User
 from app.recurrence import expand
 from app.schemas import EventCreate, EventOut, EventUpdate, UserEventOut
-from app.storage import delete_photo
+from app.storage import delete_photo, unused_photos
 from app.timeutil import as_utc, now_utc
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -86,10 +86,12 @@ def list_events(
     user: CurrentUser,
     db: DB,
     scope: str = Query("relevant", pattern="^(relevant|all)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(200, ge=1, le=200),
 ):
     """Users see events for their groups whose check-in hasn't closed more than a week ago
     and that open within 60 days; admins can request all."""
-    stmt = select(Event).order_by(Event.starts_at.desc())
+    stmt = select(Event).order_by(Event.starts_at.desc(), Event.id.desc())
     if user.role != Role.admin:
         stmt = stmt.where(visible_to(user))
     if scope == "relevant" or user.role != Role.admin:
@@ -97,10 +99,11 @@ def list_events(
             Event.check_in_closes_at >= now_utc() - timedelta(days=7),
             Event.check_in_opens_at <= now_utc() + timedelta(days=60),
         )
-    events = db.scalars(stmt).all()
+    events = db.scalars(stmt.offset((page - 1) * page_size).limit(page_size)).all()
     mine = {
         a.event_id: a.status
-        for a in db.scalars(select(Attendance).where(Attendance.user_id == user.id))
+        for a in db.scalars(select(Attendance).where(
+            Attendance.user_id == user.id, Attendance.event_id.in_([e.id for e in events])))
     }
     return [_user_view(e, mine.get(e.id)) for e in events]
 
@@ -189,11 +192,15 @@ def update_event(event_id: int, body: EventUpdate, _: AdminUser, db: DB, scope: 
 
 @router.delete("/{event_id}", status_code=204)
 def delete_event(event_id: int, _: AdminUser, db: DB, scope: str = SCOPE):
+    """Delete events with their attendances. Paper-list imports for them are kept, unassigned
+    (they can be pointed at another event), so their photos stay too."""
     event = get_event_or_404(db, event_id)
-    photos = []
-    for e in _targets(db, event, scope):
-        photos += [a.photo_path for a in e.attendances]
+    targets = _targets(db, event, scope)
+    photos = [a.photo_path for e in targets for a in e.attendances]
+    db.execute(update(OcrImport).where(OcrImport.event_id.in_([e.id for e in targets])).values(event_id=None))
+    for e in targets:
         db.delete(e)
+    orphaned = unused_photos(db, photos)
     db.commit()
-    for p in photos:
+    for p in orphaned:
         delete_photo(p)

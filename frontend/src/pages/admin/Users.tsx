@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { api, fmt, json, type Role, type User } from '../../api'
+import { allPages, api, fmt, json, type Role, type User } from '../../api'
 import { useAuth } from '../../auth'
 import { ErrorNote, Modal } from '../../components'
 
@@ -13,7 +13,7 @@ export default function Users() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    api<User[]>(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ''}`).then(setUsers).catch((e) => setError(e.message))
+    allPages<User>(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ''}`).then(setUsers).catch((e) => setError(e.message))
   }, [q])
   useEffect(load, [load])
 
