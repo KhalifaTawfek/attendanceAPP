@@ -25,7 +25,7 @@ def login(body: LoginIn, db: DB):
         login_attempts.labels(result="inactive").inc()
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account is disabled")
     login_attempts.labels(result="success").inc()
-    return TokenOut(access_token=create_access_token(user.id, user.role.value), user=user)
+    return TokenOut(access_token=create_access_token(user.id, user.role.value, user.token_version), user=user)
 
 
 @router.post("/register", response_model=TokenOut, status_code=201)
@@ -40,7 +40,7 @@ def register(body: RegisterIn, db: DB):
     )
     db.add(user)
     db.commit()
-    return TokenOut(access_token=create_access_token(user.id, user.role.value), user=user)
+    return TokenOut(access_token=create_access_token(user.id, user.role.value, user.token_version), user=user)
 
 
 @router.get("/me", response_model=UserOut)
@@ -53,4 +53,11 @@ def change_password(body: ChangePasswordIn, user: CurrentUser, db: DB):
     if not verify_password(body.current_password, user.password_hash):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is incorrect")
     user.password_hash = hash_password(body.new_password)
+    user.token_version += 1
+    db.commit()
+
+
+@router.post("/logout", status_code=204)
+def logout(user: CurrentUser, db: DB):
+    user.token_version += 1
     db.commit()

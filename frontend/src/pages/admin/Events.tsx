@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  api, describeSeries, fmt, json, qs, WEEKDAYS,
+  allPages, api, describeSeries, fmt, json, qs, WEEKDAYS,
   type EventItem, type Frequency, type GroupBrief, type User,
 } from '../../api'
 import { ErrorNote, Modal } from '../../components'
-import { ROOM_FLOORS, ROOMS } from '../../rooms'
 
 type Scope = 'this' | 'future' | 'all'
 
@@ -28,7 +27,7 @@ export default function Events() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    api<EventItem[]>('/events?scope=all').then(setEvents).catch((e) => setError(e.message))
+    allPages<EventItem>('/events?scope=all').then(setEvents).catch((e) => setError(e.message))
     api<GroupBrief[]>('/admin/groups').then(setGroups).catch(() => {})
   }, [])
   useEffect(load, [load])
@@ -75,6 +74,7 @@ export default function Events() {
                 <td><span className={`badge ${state(e)}`}>{state(e)}</span></td>
                 <td className="actions">
                   <Link to={`/admin/attendances?event_id=${e.id}`}>Attendances</Link>
+                  <Link to={`/admin/import?event_id=${e.id}`}>Import list</Link>
                   <button className="link" onClick={() => setAbsentFor(e)}>Absentees</button>
                   <button className="link" onClick={() => setEditing(e)}>Edit</button>
                   <button className="link danger" onClick={() => setDeleting(e)}>Delete</button>
@@ -133,6 +133,7 @@ function EventForm({ event, groups, onClose, onSaved }: {
   const [scope, setScope] = useState<Scope>('this')
   const [error, setError] = useState<string | null>(null)
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value })
+  const [today] = useState(() => toLocalInput(new Date().toISOString()).slice(0, 10))
 
   const toggle = (s: Set<number>, v: number, apply: (s: Set<number>) => void) => {
     const next = new Set(s)
@@ -142,6 +143,19 @@ function EventForm({ event, groups, onClose, onSaved }: {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (f.ends_at <= f.starts_at) {
+      setError('End time must be after start time.')
+      return
+    }
+    if (!event && f.starts_at.slice(0, 10) < today) {
+      setError('Start date cannot be in the past.')
+      return
+    }
+    if (f.check_in_opens_at && f.check_in_closes_at && f.check_in_closes_at <= f.check_in_opens_at) {
+      setError('Check-in close time must be after open time.')
+      return
+    }
+    setError(null)
     const times = {
       starts_at: fromLocalInput(f.starts_at),
       ends_at: fromLocalInput(f.ends_at),
@@ -179,7 +193,8 @@ function EventForm({ event, groups, onClose, onSaved }: {
       }
       onSaved()
     } catch (err) {
-      setError((err as Error).message)
+      const message = (err as Error).message
+      setError(message.includes('ends_at must be after starts_at') ? 'End time must be after start time.' : message)
     }
   }
 
@@ -187,21 +202,11 @@ function EventForm({ event, groups, onClose, onSaved }: {
     <Modal title={event ? 'Edit event' : 'New event'} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         <label>Title *<input required maxLength={200} value={f.title} onChange={set('title')} /></label>
-        <label>Room
-          <select value={f.location} onChange={set('location')}>
-            <option value="">No room</option>
-            {f.location && !ROOMS.includes(f.location) && <option value={f.location}>{f.location}</option>}
-            {ROOM_FLOORS.map((fl) => (
-              <optgroup key={fl.label} label={fl.label}>
-                {fl.rooms.map((r) => <option key={r}>{r}</option>)}
-              </optgroup>
-            ))}
-          </select>
-        </label>
+        <label>Location<input maxLength={200} value={f.location} onChange={set('location')} /></label>
         <label>Description<textarea rows={2} value={f.description} onChange={set('description')} /></label>
         <div className="two">
-          <label>Starts *<input type="datetime-local" required value={f.starts_at} onChange={set('starts_at')} /></label>
-          <label>Ends *<input type="datetime-local" required value={f.ends_at} onChange={set('ends_at')} /></label>
+          <label>Starts *<input type="datetime-local" required min={event ? undefined : `${today}T00:00`} max={f.ends_at || undefined} value={f.starts_at} onChange={set('starts_at')} /></label>
+          <label>Ends *<input type="datetime-local" required min={f.starts_at || `${today}T00:00`} value={f.ends_at} onChange={set('ends_at')} /></label>
         </div>
         <div className="two">
           <label>Check-in opens <span className="muted small">(default 15 min before start)</span>

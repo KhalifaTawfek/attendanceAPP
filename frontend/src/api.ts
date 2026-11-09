@@ -64,9 +64,92 @@ export interface Attendance {
   review_comment: string
   reviewed_at: string | null
   submitted_at: string
+  source: 'self' | 'ocr'
   user: { id: number; email: string; full_name: string }
   event: { id: number; title: string; starts_at: string }
 }
+
+export type OcrStatus = 'matched' | 'review' | 'unmatched' | 'duplicate' | 'already_present' | 'ignored'
+
+export interface OcrLine {
+  index: number
+  image_index: number
+  raw: string
+  normalized: string
+  status: OcrStatus
+  user_id: number | null
+  score: number
+  in_audience: boolean
+  suggestions: { user_id: number; full_name: string; score: number }[]
+}
+
+export interface OcrImport {
+  id: number
+  event_id: number | null
+  engine: string
+  image_count: number
+  created_at: string
+  committed_at: string | null
+  detected_date: string | null
+  date_text: string
+  photo_date: string | null
+  event: EventItem | null
+  suggested_events: EventItem[]
+  lines: OcrLine[]
+  created_attendances: number
+}
+
+export interface OcrImportBrief {
+  id: number
+  event_id: number | null
+  event_title: string | null
+  engine: string
+  image_count: number
+  line_count: number
+  created_at: string
+  committed_at: string | null
+  created_attendances: number
+}
+
+export interface AttendanceSummary {
+  total: number
+  late: number
+  by_status: Partial<Record<AttendanceStatus, number>>
+  by_source: Partial<Record<'self' | 'ocr', number>>
+  per_event: {
+    event_id: number
+    title: string
+    starts_at: string
+    count: number
+    approved: number
+    from_lists: number
+    expected: number
+  }[]
+  per_group: { group: string; count: number }[]
+  top_users: { user_id: number; full_name: string; count: number }[]
+  granularity: Granularity
+  trend: { period: string; self: number; ocr: number; late: number }[]
+  by_weekday: number[]
+  events_in_scope: number
+  students_in_scope: number
+  avg_turnout: number | null
+  at_risk: number
+  students_low: StudentRate[]
+  students_high: StudentRate[]
+  group_rates: { group_id: number; group: string; attended: number; expected: number; rate: number }[]
+}
+
+export type Granularity = 'day' | 'week' | 'month'
+
+export interface StudentRate {
+  user_id: number
+  full_name: string
+  attended: number
+  expected: number
+  rate: number
+}
+
+export const browserTz = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
 export interface AttendancePage {
   items: Attendance[]
@@ -145,6 +228,15 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>
 }
 
+export async function allPages<T>(path: string): Promise<T[]> {
+  const items: T[] = []
+  for (let page = 1; ; page++) {
+    const batch = await api<T[]>(`${path}${path.includes('?') ? '&' : '?'}page=${page}&page_size=200`)
+    items.push(...batch)
+    if (batch.length < 200) return items
+  }
+}
+
 export const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) })
 
 export function qs(params: Record<string, string | number | boolean | undefined | null>): string {
@@ -185,3 +277,82 @@ export function describeSeries(s: Series): string {
 
 export const fmt = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+
+// --- announcements (newsletter) & polls ---------------------------------------
+export interface Announcement {
+  id: number
+  title: string
+  body: string
+  sent_at: string
+  author_name: string
+  audience_all: boolean
+  groups: GroupBrief[]
+  has_attachment: boolean
+  attachment_name: string | null
+  attachment_type: string | null
+  can_manage: boolean
+  read_at: string | null
+  recipient_count: number | null
+  read_count: number | null
+}
+
+export interface AnnouncementReader {
+  user_id: number
+  full_name: string
+  email: string
+  read_at: string | null
+}
+
+export interface PollOption {
+  id: number
+  label: string
+  position: number
+  votes: number | null
+  percentage: number | null
+}
+
+export interface Poll {
+  id: number
+  title: string
+  description: string
+  is_anonymous: boolean
+  status: 'open' | 'closed'
+  created_at: string
+  closes_at: string
+  closed_at: string | null
+  author_name: string
+  audience_all: boolean
+  groups: GroupBrief[]
+  options: PollOption[]
+  results_visible: boolean
+  total_votes: number | null
+  can_manage: boolean
+  eligible_count: number | null
+  has_voted: boolean | null
+  my_option_id: number | null
+}
+
+export interface PollVoter {
+  user_id: number
+  full_name: string
+  email: string
+  voted: boolean
+  voted_at: string | null
+  option_id: number | null
+}
+
+export interface InboxSummary {
+  unread_announcements: number
+  polls_to_vote: number
+}
+
+export const audienceLabel = (x: { audience_all: boolean; groups: GroupBrief[] }) =>
+  x.audience_all ? 'Everyone' : x.groups.map((g) => g.name).join(', ')
+
+/** "in 3 h", "in 2 days", "5 min ago" */
+export function relative(iso: string): string {
+  const diff = new Date(iso).getTime() - Date.now()
+  const abs = Math.abs(diff) / 60000
+  const [n, unit] = abs < 60 ? [Math.round(abs), 'min'] : abs < 48 * 60 ? [Math.round(abs / 60), 'h'] : [Math.round(abs / 1440), 'days']
+  return diff >= 0 ? `in ${n} ${unit}` : `${n} ${unit} ago`
+}

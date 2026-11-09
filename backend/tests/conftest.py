@@ -9,6 +9,7 @@ os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or f"sqlite:///
 os.environ["UPLOAD_DIR"] = str(_tmp / "uploads")
 os.environ["ADMIN_EMAIL"] = "admin@test.io"
 os.environ["ADMIN_PASSWORD"] = "adminpass123"
+os.environ["JWT_SECRET"] = "test-only-jwt-secret-with-at-least-32-characters"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
